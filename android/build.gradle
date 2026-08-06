@@ -1,0 +1,109 @@
+buildscript {
+  ext.safeExtGet = { prop, fallback ->
+    rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+  }
+  repositories {
+    google()
+    mavenCentral()
+  }
+  dependencies {
+    classpath "com.android.tools.build:gradle:8.6.0"
+    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${safeExtGet('kotlinVersion', '1.9.24')}"
+  }
+}
+
+def isNewArchitectureEnabled() {
+  return project.hasProperty("newArchEnabled") && project.newArchEnabled == "true"
+}
+
+apply plugin: "com.android.library"
+apply plugin: "org.jetbrains.kotlin.android"
+
+if (isNewArchitectureEnabled()) {
+  apply plugin: "com.facebook.react"
+}
+
+android {
+  namespace "com.nfcpassport"
+  compileSdk safeExtGet("compileSdkVersion", 35)
+
+  defaultConfig {
+    // Android 8.0 — NfcAdapter.enableReaderMode có từ API 19 nhưng Secure
+    // Messaging với AES-CMAC ổn định từ API 26 trở lên.
+    minSdk safeExtGet("minSdkVersion", 26)
+    targetSdk safeExtGet("targetSdkVersion", 35)
+    consumerProguardFiles "consumer-rules.pro"
+    buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", isNewArchitectureEnabled().toString()
+  }
+
+  buildFeatures {
+    buildConfig true
+  }
+
+  sourceSets {
+    main {
+      if (isNewArchitectureEnabled()) {
+        java.srcDirs += ["src/newarch"]
+      } else {
+        java.srcDirs += ["src/oldarch"]
+      }
+    }
+  }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+
+  kotlinOptions {
+    jvmTarget = "17"
+  }
+
+  packagingOptions {
+    resources {
+      // BouncyCastle đóng gói kèm metadata module gây trùng lặp khi merge.
+      excludes += [
+        "META-INF/versions/9/OSGI-INF/MANIFEST.MF",
+        "META-INF/DEPENDENCIES",
+        "META-INF/LICENSE*",
+        "META-INF/NOTICE*",
+        "META-INF/*.SF",
+        "META-INF/*.DSA",
+        "META-INF/*.RSA"
+      ]
+    }
+  }
+
+  lint {
+    abortOnError false
+  }
+}
+
+repositories {
+  google()
+  mavenCentral()
+}
+
+dependencies {
+  implementation "com.facebook.react:react-android"
+  implementation "org.jetbrains.kotlin:kotlin-stdlib:${safeExtGet('kotlinVersion', '1.9.24')}"
+
+  // JMRTD: BAC, PACE, Chip/Active Authentication, LDS parsing (ICAO 9303).
+  implementation("org.jmrtd:jmrtd:0.7.42") {
+    exclude group: "org.bouncycastle"
+  }
+  // SCUBA: lớp CardService cho android.nfc.tech.IsoDep.
+  implementation("net.sf.scuba:scuba-sc-android:0.0.26") {
+    exclude group: "org.bouncycastle"
+  }
+
+  // Bản BouncyCastle "jdk15to18" tương thích Android (không dùng module-info).
+  implementation "org.bouncycastle:bcprov-jdk15to18:1.78.1"
+  implementation "org.bouncycastle:bcutil-jdk15to18:1.78.1"
+  implementation "org.bouncycastle:bcpkix-jdk15to18:1.78.1"
+
+  // Android không decode được JPEG 2000 — DG2 của CCCD thường dùng định dạng này.
+  implementation "com.gemalto.jp2:jp2-android:1.0.3"
+
+  implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1"
+}

@@ -1,0 +1,13 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.NFC" />
+
+    <!--
+      required="false" để app vẫn cài được trên thiết bị không có NFC;
+      hãy kiểm tra bằng NfcPassport.isSupported() trước khi quét.
+    -->
+    <uses-feature
+        android:name="android.hardware.nfc"
+        android:required="false" />
+
+</manifest>

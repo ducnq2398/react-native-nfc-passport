@@ -1,0 +1,80 @@
+{
+  "name": "react-native-nfc-passport",
+  "version": "1.0.0",
+  "description": "Đọc chip NFC Căn cước công dân Việt Nam (CCCD) và hộ chiếu ICAO 9303 cho React Native. Hỗ trợ PACE, BAC, Secure Messaging, Chip Authentication, Active/Passive Authentication.",
+  "main": "lib/commonjs/index.js",
+  "module": "lib/module/index.js",
+  "types": "lib/typescript/src/index.d.ts",
+  "react-native": "src/index.ts",
+  "source": "src/index.ts",
+  "files": [
+    "src",
+    "lib",
+    "android",
+    "ios",
+    "cpp",
+    "*.podspec",
+    "react-native.config.js",
+    "!android/build",
+    "!android/.gradle",
+    "!android/.cxx",
+    "!ios/build",
+    "!**/__tests__",
+    "!**/.*"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint \"**/*.{js,ts,tsx}\"",
+    "clean": "del-cli lib",
+    "prepare": "bob build"
+  },
+  "keywords": [
+    "react-native",
+    "nfc",
+    "cccd",
+    "can-cuoc-cong-dan",
+    "epassport",
+    "icao-9303",
+    "mrtd",
+    "bac",
+    "pace",
+    "turbomodule",
+    "android",
+    "ios"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.44",
+    "del-cli": "^5.1.0",
+    "react": "18.3.1",
+    "react-native": "0.76.5",
+    "react-native-builder-bob": "^0.30.2",
+    "typescript": "^5.4.5"
+  },
+  "react-native-builder-bob": {
+    "source": "src",
+    "output": "lib",
+    "targets": [
+      "commonjs",
+      "module",
+      [
+        "typescript",
+        {
+          "project": "tsconfig.build.json"
+        }
+      ]
+    ]
+  },
+  "codegenConfig": {
+    "name": "RNNfcPassportSpec",
+    "type": "modules",
+    "jsSrcsDir": "src",
+    "android": {
+      "javaPackageName": "com.nfcpassport"
+    }
+  }
+}
