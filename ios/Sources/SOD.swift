@@ -45,8 +45,16 @@ enum SODParser {
   static func parse(_ sodBytes: Data) -> SODFile? {
     // EF.SOD ::= [APPLICATION 23] ContentInfo
     let roots = ASN1.parse(sodBytes)
-    let contentInfoNode = roots.first(where: { $0.identifier == 0x77 })
-      .flatMap { ASN1.parse($0.value).first } ?? roots.first
+    // Viết tường minh thay vì `?? roots.first`: khi chuỗi `flatMap ?? …` quá dài,
+    // Swift có thể phân giải `roots.first` thành method `first(where:)` chưa áp
+    // dụng thay vì property, và báo lỗi ở tận chỗ dùng biến.
+    let contentInfoNode: ASN1Node?
+    if let application23 = roots.first(where: { $0.identifier == 0x77 }) {
+      contentInfoNode = ASN1.parse(application23.value).first
+    } else {
+      contentInfoNode = roots.first
+    }
+
     guard let contentInfo = contentInfoNode, contentInfo.identifier == 0x30,
           let contentTypeNode = contentInfo.children.first,
           ASN1.decodeOID(contentTypeNode.value) == oidSignedData,
@@ -61,10 +69,14 @@ enum SODParser {
 
     // --- eContent → LDSSecurityObject ---
     let encapContentInfo = items[2]
-    guard let eContentWrapper = encapContentInfo.children.last,
-          let eContentOctets = eContentWrapper.children.first ?? ASN1.parse(eContentWrapper.value).first
-    else { return nil }
-    let eContent = eContentOctets.value
+    guard let eContentWrapper = encapContentInfo.children.last else { return nil }
+    let eContentOctets: ASN1Node?
+    if let child = eContentWrapper.children.first {
+      eContentOctets = child
+    } else {
+      eContentOctets = ASN1.parse(eContentWrapper.value).first
+    }
+    guard let eContent = eContentOctets?.value else { return nil }
 
     guard let lds = ASN1.parse(eContent).first, lds.identifier == 0x30, lds.children.count >= 3
     else { return nil }

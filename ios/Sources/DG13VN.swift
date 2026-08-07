@@ -63,7 +63,9 @@ enum DG13Parser {
 
   static func extractStrings(_ dg13: Data) -> [String] {
     let roots = ASN1.parse(dg13)
-    let content = roots.first(where: { $0.identifier == 0x6D })?.value ?? dg13
+    // Chú thích kiểu là bắt buộc: không có nó, Swift chọn overload `(T?, T?) -> T?`
+    // của `??` và `content` thành `Data?`.
+    let content: Data = roots.first(where: { $0.identifier == 0x6D })?.value ?? dg13
 
     var out = [String]()
     collect(ASN1.parse(content), into: &out)

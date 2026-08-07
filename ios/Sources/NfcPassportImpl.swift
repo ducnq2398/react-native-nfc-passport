@@ -3,8 +3,11 @@ import Foundation
 
 /// Điểm vào mà lớp bridge Objective-C++ gọi tới. Quản lý vòng đời
 /// `NFCTagReaderSession` và uỷ quyền phần đọc cho `PassportReader`.
+/// `@unchecked Sendable`: mọi state thay đổi được đều nằm sau serial queue
+/// `queue`; riêng `onProgress` chỉ được gán một lần khi native module khởi tạo
+/// và xoá khi teardown.
 @objc(NfcPassportImpl)
-public final class NfcPassportImpl: NSObject {
+public final class NfcPassportImpl: NSObject, @unchecked Sendable {
 
   @objc public static let shared = NfcPassportImpl()
 
