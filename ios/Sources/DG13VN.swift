@@ -63,9 +63,17 @@ enum DG13Parser {
 
   static func extractStrings(_ dg13: Data) -> [String] {
     let roots = ASN1.parse(dg13)
-    // Chú thích kiểu là bắt buộc: không có nó, Swift chọn overload `(T?, T?) -> T?`
-    // của `??` và `content` thành `Data?`.
-    let content: Data = roots.first(where: { $0.identifier == 0x6D })?.value ?? dg13
+
+    // DG13 được bọc trong tag '6D'; nếu không thấy thì parse thẳng nội dung.
+    //
+    // Cố tình KHÔNG viết `roots.first(where:)?.value ?? dg13`: với biểu thức đó
+    // Swift chọn overload `(T?, T?) -> T?` của `??` và suy ra `content: Data?`,
+    // làm hai lời gọi bên dưới không compile. Dạng `if let` bên dưới lấy kiểu
+    // trực tiếp từ `dg13` nên không có chỗ cho suy luận sai.
+    var content = dg13
+    if let container = roots.first(where: { $0.identifier == 0x6D }) {
+      content = container.value
+    }
 
     var out = [String]()
     collect(ASN1.parse(content), into: &out)
