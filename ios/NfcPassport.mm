@@ -1,8 +1,15 @@
 #import "NfcPassport.h"
 
-// Header cầu nối do Swift sinh ra (tên đặt trong podspec qua
-// SWIFT_OBJC_INTERFACE_HEADER_NAME).
+// Header cầu nối do Swift sinh ra. Vị trí phụ thuộc cách CocoaPods dựng pod:
+//  - `use_frameworks!` (framework tĩnh hoặc động): header nằm trong
+//    react_native_nfc_passport.framework/Headers → phải dùng dạng <module/header>.
+//  - Mặc định của React Native (static library): chỉ dạng "header" giải được.
+// Không có dạng nào đúng cho cả hai, nên phải dò bằng __has_include.
+#if __has_include(<react_native_nfc_passport/react_native_nfc_passport-Swift.h>)
+#import <react_native_nfc_passport/react_native_nfc_passport-Swift.h>
+#else
 #import "react_native_nfc_passport-Swift.h"
+#endif
 
 static NSString *const kProgressEvent = @"NfcPassport:progress";
 
