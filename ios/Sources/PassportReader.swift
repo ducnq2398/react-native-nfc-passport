@@ -88,7 +88,9 @@ struct PassportReader {
     "DG13": 13, "DG14": 14, "DG15": 15,
   ]
   /// File nhỏ trước để UI phản hồi sớm; DG2 (lớn nhất) sau cùng.
-  private static let readOrder = ["COM", "DG1", "DG13", "DG11", "DG12", "DG15", "DG5", "DG7", "DG2"]
+  private static let readOrder = [
+    "COM", "DG1", "DG13", "DG14", "DG11", "DG12", "DG15", "DG5", "DG7", "DG2",
+  ]
   private static let efCardAccess: UInt16 = 0x011C
 
   let options: ScanOptions
@@ -295,9 +297,13 @@ struct PassportReader {
       wanted.insert("SOD")
       wanted.insert("COM")
     }
-    wanted.remove("DG14") // đã đọc ở bước Chip Authentication
-
+    // KHÔNG loại DG14 ở đây. Trước kia nó bị loại với lý do "đã đọc ở bước Chip
+    // Authentication" — nhưng điều đó chỉ đúng khi CA được bật. Với
+    // `chipAuthentication: false` thì DG14 không bao giờ được đọc dù người dùng
+    // có yêu cầu. Vòng lặp bên dưới đã bỏ qua file đã có nên không đọc trùng.
     var plan = PassportReader.readOrder.filter { wanted.contains($0) }
+    // File được yêu cầu nhưng không nằm trong thứ tự ưu tiên vẫn phải được đọc.
+    plan += wanted.filter { !PassportReader.readOrder.contains($0) && $0 != "SOD" }.sorted()
     if wanted.contains("SOD") { plan.append("SOD") }
 
     for (index, name) in plan.enumerated() {

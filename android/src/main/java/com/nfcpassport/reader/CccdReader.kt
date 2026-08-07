@@ -78,7 +78,8 @@ class CccdReader(
     )
 
     /** Thứ tự đọc: file nhỏ trước để có phản hồi UI sớm, DG2 (lớn nhất) sau cùng. */
-    val READ_ORDER = listOf("COM", "DG1", "DG13", "DG11", "DG12", "DG15", "DG5", "DG7", "DG2")
+    val READ_ORDER =
+      listOf("COM", "DG1", "DG13", "DG14", "DG11", "DG12", "DG15", "DG5", "DG7", "DG2")
   }
 
   private val rawFiles = LinkedHashMap<String, ByteArray>()
@@ -350,9 +351,10 @@ class CccdReader(
       wanted.add("SOD")
       wanted.add("COM")
     }
-    // DG14 đã được đọc ở bước Chip Authentication.
-    wanted.remove("DG14")
-
+    // KHÔNG loại DG14 ở đây. Trước kia nó bị loại với lý do "đã đọc ở bước Chip
+    // Authentication" — nhưng điều đó chỉ đúng khi CA được bật. Với
+    // `chipAuthentication: false` thì DG14 không bao giờ được đọc dù người dùng
+    // có yêu cầu. `readFile` đã trả về bản đã cache nên không đọc trùng.
     val ordered = READ_ORDER.filter { wanted.contains(it) } +
       wanted.filter { !READ_ORDER.contains(it) && it != "SOD" }
     val plan = ordered + listOfNotNull("SOD".takeIf { wanted.contains(it) })
