@@ -50,7 +50,9 @@ Nếu app bật minify, ProGuard rules đã được đóng gói kèm (`consumer
 
 **1. Bật capability "Near Field Communication Tag Reading"** trong Xcode → target → *Signing & Capabilities*. Thao tác này thêm entitlement và cập nhật App ID trên Apple Developer.
 
-**2. Thêm AID của eMRTD** vào `ios/<App>/<App>.entitlements`:
+Thao tác này chỉ thêm `com.apple.developer.nfc.readersession.formats` vào file `.entitlements`. Hai key còn lại nằm ở **`Info.plist`**, không phải entitlements.
+
+**2. Thêm AID của eMRTD** vào `ios/<App>/Info.plist`:
 
 ```xml
 <key>com.apple.developer.nfc.readersession.iso7816.select-identifiers</key>
@@ -59,6 +61,8 @@ Nếu app bật minify, ProGuard rules đã được đóng gói kèm (`consumer
 </array>
 ```
 
+> Key này có tiền tố `com.apple.developer.` nên rất dễ nhầm là entitlement. Nó **không** phải. Đặt nhầm vào `.entitlements` sẽ làm việc ký thất bại với thông báo *"Entitlement … not found and could not be included in profile"*.
+
 **3. Thêm mô tả quyền** vào `Info.plist`:
 
 ```xml
@@ -66,7 +70,7 @@ Nếu app bật minify, ProGuard rules đã được đóng gói kèm (`consumer
 <string>Ứng dụng cần quyền NFC để đọc chip trên thẻ Căn cước công dân của bạn.</string>
 ```
 
-Thiếu bất kỳ bước nào ở trên, `NFCTagReaderSession` sẽ bị hệ thống từ chối ngay khi `begin()`.
+Thiếu bước 1 hoặc 3 thì `NFCTagReaderSession` bị từ chối ngay khi `begin()`. Thiếu bước 2 thì phiên **vẫn mở và sheet vẫn hiện**, nhưng CoreNFC không bao giờ trả thẻ về dưới dạng `.iso7816` — chạm thẻ sẽ không có phản ứng gì cho tới khi hệ thống tự timeout.
 
 ---
 

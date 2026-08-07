@@ -167,9 +167,27 @@ extension NfcPassportImpl: NFCTagReaderSessionDelegate {
       return
     }
 
-    guard tags.count == 1, case let .iso7816(iso7816Tag) = tags[0] else {
-      // Nhiều thẻ trong vùng đọc hoặc thẻ không phải ISO 7816.
+    guard tags.count == 1 else {
+      session.alertMessage = "Phát hiện nhiều thẻ. Chỉ để một thẻ trong vùng đọc."
       session.restartPolling()
+      return
+    }
+
+    guard case let .iso7816(iso7816Tag) = tags[0] else {
+      // CoreNFC chỉ trả về `.iso7816` khi nó SELECT được một AID có trong khoá
+      // `com.apple.developer.nfc.readersession.iso7816.select-identifiers` của
+      // **Info.plist** (khoá này có tiền tố com.apple.developer nhưng không phải
+      // entitlement). Thiếu AID A0000002471001 ở đó là nguyên nhân áp đảo của
+      // triệu chứng "sheet mở nhưng chạm thẻ không có gì xảy ra" — báo rõ thay
+      // vì lặng lẽ restartPolling() để người tích hợp không phải đoán.
+      let error = NfcPassportError(
+        code: .notAnEmrtd,
+        message: "Thẻ không được nhận là ISO 7816. Kiểm tra Info.plist đã có khoá "
+          + "com.apple.developer.nfc.readersession.iso7816.select-identifiers "
+          + "chứa AID A0000002471001 chưa, và thẻ có đúng là CCCD gắn chip không."
+      )
+      session.invalidate(errorMessage: "Thẻ này không phải CCCD gắn chip.")
+      queue.async { [weak self] in self?.finishLocked(error: error) }
       return
     }
 
