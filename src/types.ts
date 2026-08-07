@@ -22,6 +22,16 @@ export type DataGroupId =
   | 'SOD';
 
 /**
+ * Định danh file xuất hiện trong `raw` và `readErrors`.
+ *
+ * Ngoài các DataGroup còn có `CARD_ACCESS` — EF.CardAccess, nơi chip công bố
+ * tham số PACE. File này được đọc trước khi thiết lập kênh bảo mật; có nó trong
+ * `raw` là cách duy nhất để phân biệt "thẻ không hỗ trợ PACE" với "PACE có
+ * nhưng thất bại" khi `accessProtocol` trả về `BAC`.
+ */
+export type RawFileId = DataGroupId | 'CARD_ACCESS';
+
+/**
  * Khoá truy cập chip.
  *
  * - `mrz`: khoá dẫn xuất từ MRZ (BAC / PACE-MRZ). Đây là cách dùng cho CCCD.
@@ -116,8 +126,15 @@ export interface ScanOptions {
   /** Trả về ảnh chân dung DG2 dưới dạng base64. Mặc định `true`. */
   includeImages?: boolean;
 
-  /** Trả về bytes thô của từng DG (hex) để debug / lưu trữ. Mặc định `false`. */
+  /** Trả về bytes thô của từng file để debug / lưu trữ. Mặc định `false`. */
   includeRawData?: boolean;
+
+  /**
+   * Cách mã hoá giá trị trong `raw`. Mặc định `'base64'` — gọn hơn hex khoảng
+   * 33% khi đi qua bridge, đáng kể với DG2. Dùng `'hex'` khi cần đọc bằng mắt
+   * để soi cấu trúc TLV.
+   */
+  rawEncoding?: 'base64' | 'hex';
 
   /** Timeout toàn phiên (ms). Mặc định 60000. */
   timeout?: number;
@@ -270,8 +287,31 @@ export interface PassportData {
   signatureImage?: FaceImage;
   security: SecurityResult;
   sod?: SodInfo;
-  /** Bytes thô của từng DG, hex viết thường. Chỉ có khi `includeRawData: true`. */
-  raw?: Partial<Record<DataGroupId, string>>;
+  /**
+   * Các file yêu cầu đọc nhưng thất bại, kèm lý do và status word của chip.
+   * Chỉ xuất hiện khi có lỗi. DataGroup không tồn tại trên thẻ cũng nằm ở đây
+   * (thường kèm `SW=6A82`), nên hãy dùng để phân biệt "thẻ không có" với
+   * "đọc hỏng" thay vì chỉ kiểm tra trường tương ứng có `undefined` hay không.
+   */
+  readErrors?: Partial<Record<RawFileId, string>>;
+
+  /**
+   * Bytes thô của từng file. Chỉ có khi `includeRawData: true`.
+   *
+   * Mã hoá theo `rawEncoding` — mặc định base64 (không có prefix `data:`),
+   * hoặc hex viết thường nếu bạn chọn `'hex'`.
+   *
+   * Đây là dữ liệu đúng như chip trả về, chưa qua parser nào và còn nguyên tag
+   * ngoài cùng (`61` của DG1, `6D` của DG13, `77` của SOD) — dùng để tự parse,
+   * lưu bằng chứng, hoặc gửi kèm khi báo lỗi.
+   *
+   * ```ts
+   * const { raw } = await NfcPassport.scan({ accessKey, includeRawData: true });
+   * raw?.DG1   // "YVtfH1g…"
+   * raw?.SOD
+   * ```
+   */
+  raw?: Partial<Record<RawFileId, string>>;
   /** Thời điểm đọc xong, ISO 8601. */
   readAt: string;
   /** Tổng thời gian đọc (ms). */

@@ -130,7 +130,8 @@ accessKey: { type: 'mrz', mrz: { rawMrz: line1 + '\n' + line2 + '\n' + line3 } }
 | `passiveAuthentication` | `true` | Kiểm tra hash DG + chữ ký SOD |
 | `cscaCertificates` | `[]` | PEM/DER-base64 của CSCA để xác thực đầy đủ chuỗi tin cậy |
 | `includeImages` | `true` | Trả ảnh DG2/DG7 dạng base64 |
-| `includeRawData` | `false` | Trả bytes thô từng DG (hex) |
+| `includeRawData` | `false` | Trả bytes thô từng file trong `raw` |
+| `rawEncoding` | `'base64'` | Mã hoá của `raw`: `'base64'` hoặc `'hex'` |
 | `timeout` | `60000` | Timeout toàn phiên (ms) |
 | `ios` | — | Văn bản hiển thị trên NFC sheet |
 

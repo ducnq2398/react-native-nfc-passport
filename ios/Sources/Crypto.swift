@@ -24,6 +24,16 @@ enum SMCipher {
     }
   }
 
+  /// Tên báo lên JS trong `security.secureMessagingCipher`.
+  var displayName: String {
+    switch self {
+    case .desEDE: return "DESede"
+    case .aes128: return "AES-128"
+    case .aes192: return "AES-192"
+    case .aes256: return "AES-256"
+    }
+  }
+
   /// KDF dùng SHA-1 cho 3DES/AES-128 và SHA-256 cho AES-192/256.
   var kdfDigest: Crypto.Digest {
     switch self {

@@ -19,6 +19,8 @@ data class ScanRequest(
   val cscaCertificates: List<String>,
   val includeImages: Boolean,
   val includeRawData: Boolean,
+  /** `"base64"` (mặc định) hoặc `"hex"`. */
+  val rawEncoding: String,
   val timeoutMs: Long,
 ) {
   companion object {
@@ -81,6 +83,7 @@ data class ScanRequest(
         cscaCertificates = csca,
         includeImages = options.getBooleanOr("includeImages", true),
         includeRawData = options.getBooleanOr("includeRawData", false),
+        rawEncoding = if (options.getStringOr("rawEncoding", "base64") == "hex") "hex" else "base64",
         timeoutMs = options.getDoubleOr("timeout", 60000.0).toLong(),
       )
     }

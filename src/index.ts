@@ -151,6 +151,7 @@ export async function scan(options: ScanOptions): Promise<PassportData> {
     cscaCertificates: options.cscaCertificates ?? [],
     includeImages: options.includeImages ?? true,
     includeRawData: options.includeRawData ?? false,
+    rawEncoding: options.rawEncoding ?? 'base64',
     timeout: options.timeout ?? 60000,
     ios: { ...DEFAULT_IOS_MESSAGES, ...(options.ios ?? {}) },
   };

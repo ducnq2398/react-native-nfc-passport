@@ -1,6 +1,7 @@
 package com.nfcpassport.reader
 
 import android.nfc.tech.IsoDep
+import android.util.Base64
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableMap
 import com.nfcpassport.ErrorCode
@@ -81,6 +82,9 @@ class CccdReader(
   }
 
   private val rawFiles = LinkedHashMap<String, ByteArray>()
+
+  /** Tên file → lý do không đọc được, trả lên JS trong `readErrors`. */
+  private val readErrors = LinkedHashMap<String, String>()
 
   fun read(isoDep: IsoDep): WritableMap {
     val startedAt = System.currentTimeMillis()
@@ -192,6 +196,9 @@ class CccdReader(
   private fun tryPace(service: PassportService, bacKey: BACKey): String? {
     val paceInfos = try {
       val bytes = service.getInputStream(PassportService.EF_CARD_ACCESS).use { it.readBytes() }
+      // Giữ lại để trả về trong `raw`: đây là cách duy nhất phân biệt "thẻ không
+      // công bố PACE" với "PACE có nhưng thất bại" khi kết quả rơi về BAC.
+      rawFiles["CARD_ACCESS"] = bytes
       CardAccessFile(ByteArrayInputStream(bytes)).securityInfos.filterIsInstance<PACEInfo>()
     } catch (e: Exception) {
       // Không có EF.CardAccess ⇒ thẻ chỉ hỗ trợ BAC.
@@ -363,7 +370,22 @@ class CccdReader(
         val fatal = mapped.code == ErrorCode.TAG_LOST ||
           (mapped.code == ErrorCode.COMMUNICATION_ERROR && mapped.statusWord == null)
         if (fatal) throw mapped
+        // Không nuốt im lặng: ghi lại để trả về trong `readErrors`.
+        readErrors[name] = mapped.statusWord
+          ?.let { "${mapped.message} [SW=$it]" }
+          ?: (mapped.message ?: "Lỗi không xác định")
       }
+    }
+
+    // Không đọc nổi file nào thì kết quả rỗng là vô nghĩa — báo lỗi thật kèm
+    // status word, thay vì trả về object trống trông như thành công.
+    val payloadFiles = rawFiles.keys.filter { it != "DG14" && it != "CARD_ACCESS" }
+    if (payloadFiles.isEmpty() && readErrors.isNotEmpty()) {
+      throw NfcPassportException(
+        ErrorCode.COMMUNICATION_ERROR,
+        "Không đọc được DataGroup nào sau khi mở kênh bảo mật. Chi tiết — " +
+          readErrors.entries.sortedBy { it.key }.joinToString(" | ") { "${it.key}: ${it.value}" }
+      )
     }
   }
 
@@ -447,9 +469,18 @@ class CccdReader(
         .getOrNull()?.let { result.putMap("sod", it) }
     }
 
+    if (readErrors.isNotEmpty()) {
+      result.putMap("readErrors", Arguments.createMap().apply {
+        readErrors.forEach { (name, reason) -> putString(name, reason) }
+      })
+    }
+
     if (request.includeRawData) {
+      val useHex = request.rawEncoding == "hex"
       result.putMap("raw", Arguments.createMap().apply {
-        rawFiles.forEach { (name, bytes) -> putString(name, Hex.encode(bytes)) }
+        rawFiles.forEach { (name, bytes) ->
+          putString(name, if (useHex) Hex.encode(bytes) else Base64.encodeToString(bytes, Base64.NO_WRAP))
+        }
       })
     }
 

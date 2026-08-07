@@ -16,6 +16,8 @@ struct ScanOptions {
   var cscaCertificates: [String] = []
   var includeImages = true
   var includeRawData = false
+  /// `"base64"` (mặc định) hoặc `"hex"`.
+  var rawEncoding = "base64"
   var alertMessage = ""
   var connectingMessage = ""
   var readingMessage = ""
@@ -55,6 +57,7 @@ struct ScanOptions {
     cscaCertificates = dictionary["cscaCertificates"] as? [String] ?? []
     includeImages = dictionary["includeImages"] as? Bool ?? true
     includeRawData = dictionary["includeRawData"] as? Bool ?? false
+    rawEncoding = (dictionary["rawEncoding"] as? String) == "hex" ? "hex" : "base64"
 
     let ios = dictionary["ios"] as? [String: Any] ?? [:]
     alertMessage = ios["alertMessage"] as? String
@@ -96,7 +99,7 @@ struct PassportReader {
     var files = [String: Data]()
 
     // ------------------------------------------------ 1. Secure Messaging
-    let access = try await establishSecureMessaging(session: session)
+    let access = try await establishSecureMessaging(session: session, files: &files)
 
     // ------------------------------------------------ 2. Chip Authentication
     var chipAuthResult = stepResult(succeeded: false, skipped: true, reason: "Không được yêu cầu")
@@ -114,7 +117,24 @@ struct PassportReader {
     }
 
     // ------------------------------------------------ 3. Đọc DataGroup
-    try await readFiles(session: session, into: &files)
+    let readErrors = try await readFiles(session: session, into: &files)
+
+    // Không đọc nổi file nào thì kết quả rỗng là vô nghĩa — báo lỗi thật kèm
+    // status word để chẩn đoán, thay vì trả về object trống trông như thành công.
+    let payloadFiles = files.keys.filter { $0 != "DG14" }
+    if payloadFiles.isEmpty, !readErrors.isEmpty {
+      let detail = readErrors
+        .sorted { $0.key < $1.key }
+        .map { "\($0.key): \($0.value)" }
+        .joined(separator: " | ")
+      let hint = chipAuthResult["succeeded"] as? Bool == true
+        ? " Chip Authentication đã đổi khoá phiên ngay trước đó — thử lại với chipAuthentication: false để khoanh vùng."
+        : ""
+      throw NfcPassportError(
+        code: .communicationError,
+        message: "Không đọc được DataGroup nào sau khi mở kênh bảo mật.\(hint) Chi tiết — \(detail)"
+      )
+    }
 
     // ------------------------------------------------ 4. Active Authentication
     var activeAuthResult = stepResult(succeeded: false, skipped: true, reason: "Không được yêu cầu")
@@ -158,6 +178,8 @@ struct PassportReader {
 
     return buildResult(
       files: files,
+      readErrors: readErrors,
+      activeCipherName: session.secureMessaging?.cipher.displayName,
       access: access,
       chipAuth: chipAuthResult,
       activeAuth: activeAuthResult,
@@ -175,12 +197,15 @@ struct PassportReader {
     let cipher: String
   }
 
-  private func establishSecureMessaging(session: TagSession) async throws -> AccessResult {
+  private func establishSecureMessaging(
+    session: TagSession,
+    files: inout [String: Data]
+  ) async throws -> AccessResult {
     var paceOID: String?
 
     if options.usePACE {
       progress("reading_card_access", 0.10, nil, "Đang đọc thông số bảo mật…")
-      paceOID = try await attemptPACE(session: session)
+      paceOID = try await attemptPACE(session: session, files: &files)
     }
 
     progress("selecting_applet", 0.24, nil, "Đang mở ứng dụng eMRTD…")
@@ -213,13 +238,16 @@ struct PassportReader {
 
   /// Trả về OID PACE nếu thành công; `nil` nghĩa là thẻ không hỗ trợ hoặc PACE
   /// hỏng vì lý do không phải sai khoá (khi đó fallback BAC vẫn có ý nghĩa).
-  private func attemptPACE(session: TagSession) async throws -> String? {
+  private func attemptPACE(session: TagSession, files: inout [String: Data]) async throws -> String? {
     let cardAccess: Data
     do {
       cardAccess = try await session.readFile(fid: PassportReader.efCardAccess)
     } catch {
       return nil // Không có EF.CardAccess ⇒ thẻ chỉ hỗ trợ BAC.
     }
+    // Giữ lại để trả về trong `raw`: đây là cách duy nhất phân biệt "thẻ không
+    // công bố PACE" với "PACE có nhưng thất bại" khi kết quả rơi về BAC.
+    files["CARD_ACCESS"] = cardAccess
 
     let infos = PACEInfo.parse(securityInfos: cardAccess).filter { $0.isECDHGenericMapping }
     guard !infos.isEmpty else { return nil }
@@ -254,7 +282,14 @@ struct PassportReader {
 
   // MARK: - Đọc file
 
-  private func readFiles(session: TagSession, into files: inout [String: Data]) async throws {
+  /// Đọc các file được yêu cầu. Trả về map `tên file → lý do lỗi` cho những file
+  /// không đọc được, để tầng trên báo lên JS thay vì im lặng bỏ qua.
+  @discardableResult
+  private func readFiles(
+    session: TagSession,
+    into files: inout [String: Data]
+  ) async throws -> [String: String] {
+    var errors = [String: String]()
     var wanted = options.dataGroups
     if options.passiveAuthentication {
       wanted.insert("SOD")
@@ -275,10 +310,17 @@ struct PassportReader {
       do {
         files[name] = try await session.readFile(fid: fid)
       } catch let error as NfcPassportError {
-        // Mất thẻ là lỗi thật; file không tồn tại trên thẻ thì bỏ qua.
+        // Mất thẻ là lỗi thật; file không tồn tại trên thẻ thì bỏ qua — nhưng
+        // vẫn ghi lại lý do để không mất dấu vết chẩn đoán.
         if error.code == .tagLost || error.code == .cancelled { throw error }
+        if let sw = error.statusWord {
+          errors[name] = "\(error.message) [SW=\(sw)]"
+        } else {
+          errors[name] = error.message
+        }
       }
     }
+    return errors
   }
 
   // MARK: - Kết quả
@@ -291,6 +333,8 @@ struct PassportReader {
 
   private func buildResult(
     files: [String: Data],
+    readErrors: [String: String],
+    activeCipherName: String?,
     access: AccessResult,
     chipAuth: [String: Any],
     activeAuth: [String: Any],
@@ -315,9 +359,11 @@ struct PassportReader {
       }
     }
 
+    // Sau Chip Authentication, kênh dùng bộ khoá và cipher mới — báo cipher đang
+    // thực sự hiệu lực chứ không phải cipher lúc mở kênh.
     var security: [String: Any] = [
       "accessProtocol": access.protocolName,
-      "secureMessagingCipher": access.cipher,
+      "secureMessagingCipher": activeCipherName ?? access.cipher,
       "chipAuthentication": chipAuth,
       "activeAuthentication": activeAuth,
       "passiveAuthentication": passive,
@@ -325,12 +371,19 @@ struct PassportReader {
     if let oid = access.paceOID { security["paceOid"] = oid }
     result["security"] = security
 
+    if !readErrors.isEmpty {
+      result["readErrors"] = readErrors
+    }
+
     if let sod = sod {
       result["sod"] = sod.dictionary
     }
     if options.includeRawData {
+      let useHex = options.rawEncoding == "hex"
       var raw = [String: String]()
-      for (name, bytes) in files { raw[name] = bytes.hexString }
+      for (name, bytes) in files {
+        raw[name] = useHex ? bytes.hexString : bytes.base64EncodedString()
+      }
       result["raw"] = raw
     }
 
