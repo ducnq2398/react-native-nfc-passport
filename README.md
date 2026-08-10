@@ -17,7 +17,7 @@ SDK nhận MRZ đã có sẵn (từ OCR ở bước trước) rồi thực hiệ
 | Active Authentication | ✅ RSA + ECDSA | ✅ RSA |
 | Passive Authentication (hash DG + chữ ký SOD + CSCA) | ✅ | ✅ |
 | DG1 (MRZ), DG2 (ảnh), DG13 (thông tin tiếng Việt), DG14, DG15 | ✅ | ✅ |
-| Giải mã JPEG 2000 của DG2 | ✅ OpenJPEG | ⚠️ ImageIO, xem [Giới hạn](#giới-hạn-đã-biết) |
+| Giải mã JPEG 2000 của DG2 | ⚠️ cần decoder rời | ⚠️ ImageIO — xem [Ảnh DG2](#ảnh-dg2-jpeg-2000) |
 | TurboModule / New Architecture | ✅ | ✅ |
 
 **Yêu cầu:** React Native ≥ 0.75 · Android 8.0 (API 26)+ · iOS 15+ (iPhone 7 trở lên).
@@ -226,8 +226,40 @@ Nếu một đợt phát hành thay đổi bố cục, bước 2 có thể lệc
 - **DG3 (vân tay) và DG4 (mống mắt)** yêu cầu Extended Access Control với chứng thư CVCA do cơ quan phát hành cấp — không hỗ trợ và sẽ không hỗ trợ.
 - **PACE trên bộ tham số MODP-DH** (`parameterId` 0/1/2) chưa cài đặt trên iOS; SDK tự lùi về BAC. Thẻ CCCD dùng đường cong elliptic nên nhánh này không xảy ra trong thực tế.
 - **Active Authentication với khoá EC trên iOS** báo `skipped`; Android hỗ trợ đầy đủ.
-- **JPEG 2000 trên iOS**: SDK dùng ImageIO để transcode DG2 sang JPEG. Nếu bản iOS không decode được, `faceImage.transcoded` sẽ là `false` và `base64` là bytes JP2 gốc — khi đó cần decoder riêng phía app. Android luôn transcode được nhờ OpenJPEG.
+- **JPEG 2000**: xem mục [Ảnh DG2](#ảnh-dg2-jpeg-2000) bên dưới.
 - **Chip Authentication trên khoá DH** (không phải EC) chưa cài đặt trên iOS.
+
+---
+
+## Ảnh DG2 (JPEG 2000)
+
+DG2 theo ISO/IEC 19794-5 thường lưu ảnh chân dung ở **JPEG 2000** — định dạng mà cả Android lẫn iOS đều không decode được một cách đảm bảo. SDK luôn *thử* transcode sang JPEG và cho bạn biết kết quả qua `faceImage.transcoded`:
+
+```ts
+if (data.faceImage?.transcoded) {
+  // mimeType = 'image/jpeg', hiển thị trực tiếp được
+  <Image source={{ uri: `data:image/jpeg;base64,${data.faceImage.base64}` }} />
+} else {
+  // base64 là bytes gốc (thường image/jp2) — cần decoder phía JS
+}
+```
+
+**Android** không kèm decoder JPEG 2000 nào. Lựa chọn duy nhất trước đây, `com.gemalto.jp2:jp2-android`, chỉ tồn tại trên JCenter — repository đã đóng và artifact không được mirror sang Maven Central, Google Maven hay JitPack. Khai báo nó sẽ làm hỏng build. Nếu bạn cần transcode phía native, tự cung cấp AAR rồi thả vào app:
+
+```gradle
+// android/app/build.gradle
+dependencies {
+    implementation files('libs/jp2-android-1.0.3.aar')
+}
+```
+
+SDK nạp `com.gemalto.jp2.JP2Decoder` bằng reflection nên chỉ cần lớp đó có mặt trong classpath là tự động hoạt động, không cần cấu hình thêm. Fork nào phơi ra cùng tên lớp cũng dùng được.
+
+**iOS** dùng ImageIO, decode được JPEG 2000 trên phần lớn phiên bản nhưng không phải tất cả.
+
+**Cách đơn giản nhất cho cả hai nền tảng** là decode phía JS khi `transcoded === false` — nhiều thư viện JPEG 2000 thuần JS/WASM làm được việc này, và bạn chỉ phải xử lý một đường dẫn code duy nhất.
+
+Một số đợt phát hành CCCD dùng thẳng JPEG cho DG2; những thẻ đó luôn cho `transcoded: true` trên cả hai nền tảng mà không cần gì thêm.
 
 ---
 

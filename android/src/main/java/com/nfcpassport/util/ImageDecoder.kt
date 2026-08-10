@@ -3,15 +3,22 @@ package com.nfcpassport.util
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
-import com.gemalto.jp2.JP2Decoder
 import java.io.ByteArrayOutputStream
 
 /**
  * Giải mã ảnh sinh trắc trong DG2/DG5/DG7.
  *
- * DG2 của eMRTD (ISO/IEC 19794-5) thường chứa JPEG 2000 — Android không có
- * decoder sẵn nên dùng OpenJPEG qua `com.gemalto.jp2`. Kết quả luôn được
- * transcode sang JPEG để React Native hiển thị được bằng `<Image>`.
+ * DG2 của eMRTD (ISO/IEC 19794-5) thường chứa JPEG 2000, mà Android không có
+ * decoder sẵn. Thư viện **không** khai báo phụ thuộc vào decoder nào cả — xem
+ * ghi chú trong `android/build.gradle` — nên ở đây thử nạp
+ * `com.gemalto.jp2.JP2Decoder` bằng reflection:
+ *
+ *  - App có cung cấp AAR đó ⇒ ảnh được transcode sang JPEG, `transcoded = true`.
+ *  - Không có ⇒ trả bytes JP2 gốc kèm mime, `transcoded = false`, để phía JS
+ *    tự decode.
+ *
+ * Ảnh JPEG thường (một số đợt phát hành CCCD dùng) luôn transcode được bằng
+ * `BitmapFactory`, không phụ thuộc gì thêm.
  */
 object ImageDecoder {
 
@@ -28,14 +35,10 @@ object ImageDecoder {
   fun decode(bytes: ByteArray, declaredMimeType: String?, fallbackWidth: Int, fallbackHeight: Int): DecodedImage {
     val mime = (declaredMimeType ?: sniffMimeType(bytes)).lowercase()
 
+    val isJp2 = mime.contains("jp2") || mime.contains("jpeg2000") || isJpeg2000(bytes)
     val bitmap: Bitmap? = try {
-      when {
-        mime.contains("jp2") || mime.contains("jpeg2000") || isJpeg2000(bytes) ->
-          JP2Decoder(bytes).decode()
-        else -> BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-      }
+      if (isJp2) decodeJpeg2000(bytes) else BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
     } catch (e: Throwable) {
-      // JP2Decoder có thể ném UnsatisfiedLinkError trên ABI không hỗ trợ.
       null
     }
 
@@ -63,6 +66,25 @@ object ImageDecoder {
       height = height,
       transcoded = true,
     )
+  }
+
+  /**
+   * Decoder JPEG 2000 tuỳ chọn, nạp một lần bằng reflection.
+   *
+   * `null` nghĩa là app không cung cấp `com.gemalto.jp2:jp2-android` (hoặc một
+   * fork phơi ra cùng lớp `com.gemalto.jp2.JP2Decoder`).
+   */
+  private val jp2DecoderClass: Class<*>? by lazy {
+    runCatching { Class.forName("com.gemalto.jp2.JP2Decoder") }.getOrNull()
+  }
+
+  /** `new JP2Decoder(byte[]).decode()` — trả `null` nếu decoder vắng mặt hoặc lỗi. */
+  private fun decodeJpeg2000(bytes: ByteArray): Bitmap? {
+    val clazz = jp2DecoderClass ?: return null
+    return runCatching {
+      val decoder = clazz.getConstructor(ByteArray::class.java).newInstance(bytes)
+      clazz.getMethod("decode").invoke(decoder) as? Bitmap
+    }.getOrNull() // UnsatisfiedLinkError trên ABI không hỗ trợ cũng rơi vào đây.
   }
 
   /** Nhận diện JPEG 2000 qua signature box (JP2) hoặc SOC marker (codestream J2K). */

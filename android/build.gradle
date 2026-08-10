@@ -102,8 +102,17 @@ dependencies {
   implementation "org.bouncycastle:bcutil-jdk15to18:1.78.1"
   implementation "org.bouncycastle:bcpkix-jdk15to18:1.78.1"
 
-  // Android không decode được JPEG 2000 — DG2 của CCCD thường dùng định dạng này.
-  implementation "com.gemalto.jp2:jp2-android:1.0.3"
+  // KHÔNG khai báo decoder JPEG 2000 ở đây.
+  //
+  // `com.gemalto.jp2:jp2-android` từng là lựa chọn duy nhất cho Android nhưng
+  // chỉ được publish lên JCenter — repository này đã đóng và artifact không
+  // được mirror sang Maven Central, Google Maven hay JitPack (JitPack build lỗi
+  // ở mọi tag vì thư viện có mã NDK). Khai báo nó ở đây làm hỏng build của mọi
+  // app dùng thư viện này.
+  //
+  // Thay vào đó `ImageDecoder` nạp `com.gemalto.jp2.JP2Decoder` bằng reflection:
+  // app nào tự cung cấp được AAR thì có transcode, còn lại nhận bytes JP2 gốc
+  // kèm `transcoded: false`. Xem mục "Ảnh DG2 trên Android" trong README.
 
   implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1"
 }
