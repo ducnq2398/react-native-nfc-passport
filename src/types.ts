@@ -178,7 +178,7 @@ export interface Dg1MrzInfo {
 export interface VnCccdPersonalInfo {
   /** Số CCCD (12 chữ số). */
   idNumber?: string;
-  /** Số CMND 9 chữ số cũ, nếu có. */
+  /** Số giấy tờ cũ, nếu có: CMND 9 chữ số, hoặc CCCD 12 chữ số khi đã đổi sang thẻ Căn cước. */
   oldIdNumber?: string;
   /** Họ và tên đầy đủ, có dấu tiếng Việt. */
   fullName?: string;
@@ -191,9 +191,9 @@ export interface VnCccdPersonalInfo {
   ethnicity?: string;
   /** Tôn giáo. */
   religion?: string;
-  /** Quê quán. */
+  /** Quê quán (CCCD 2021) — trên thẻ Căn cước 2024 mặt thẻ in là "Nơi đăng ký khai sinh". */
   placeOfOrigin?: string;
-  /** Nơi thường trú. */
+  /** Nơi thường trú (CCCD 2021) — trên thẻ Căn cước 2024 mặt thẻ in là "Nơi cư trú". */
   placeOfResidence?: string;
   /** Đặc điểm nhận dạng. */
   personalIdentification?: string;
@@ -205,10 +205,22 @@ export interface VnCccdPersonalInfo {
   motherName?: string;
   spouseName?: string;
   /**
+   * Mẫu thẻ, suy từ ngày cấp: `CCCD` (mẫu 2021) hoặc `CAN_CUOC` (mẫu 2024,
+   * cấp từ 01/07/2024 theo Luật Căn cước 2023).
+   */
+  cardType?: 'CCCD' | 'CAN_CUOC';
+  /**
    * Toàn bộ chuỗi UTF-8 đọc được từ DG13 theo đúng thứ tự xuất hiện.
    * Dùng trường này khi mapping ở trên không khớp với thẻ của bạn.
    */
   rawFields: string[];
+  /**
+   * Giá trị DG13 gom theo chỉ số trường (`SEQUENCE { INTEGER chỉ_số, giá_trị… }`),
+   * khoá là chỉ số dạng chuỗi. Giá trị rỗng giữ nguyên là `""` để không lệch vị trí,
+   * ví dụ `"13": ["", "TRẦN THỊ C"]` khi không có tên cha.
+   * Không có khi DG13 không theo bố cục có chỉ số.
+   */
+  fieldsByIndex?: Record<string, string[]>;
 }
 
 /** Ảnh chân dung trích từ DG2. */

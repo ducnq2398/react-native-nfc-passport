@@ -545,9 +545,17 @@ class CccdReader(
     info.fatherName?.let { putString("fatherName", it) }
     info.motherName?.let { putString("motherName", it) }
     info.spouseName?.let { putString("spouseName", it) }
+    info.cardType?.let { putString("cardType", it) }
     putArray("rawFields", Arguments.createArray().apply {
       info.rawFields.forEach { pushString(it) }
     })
+    if (info.fieldsByIndex.isNotEmpty()) {
+      putMap("fieldsByIndex", Arguments.createMap().apply {
+        info.fieldsByIndex.forEach { (index, values) ->
+          putArray(index.toString(), Arguments.createArray().apply { values.forEach { pushString(it) } })
+        }
+      })
+    }
   }
 
   private fun extractFaceImage(dg2Bytes: ByteArray): WritableMap? {

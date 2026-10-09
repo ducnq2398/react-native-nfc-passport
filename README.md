@@ -212,12 +212,34 @@ Nếu **không** truyền `cscaCertificates`, `documentSignerTrusted` luôn là 
 
 ## Ghi chú về DG13
 
-ICAO 9303 để DG13 ("Optional details") cho quốc gia phát hành tự định nghĩa và **không có đặc tả công khai cho Việt Nam**. Parser hoạt động hai bước:
+ICAO 9303 để DG13 ("Optional details") cho quốc gia phát hành tự định nghĩa và **không có đặc tả công khai cho Việt Nam**. Parser hoạt động ba bước:
 
 1. Duyệt cây TLV, gom mọi leaf decode được thành UTF-8 in được, giữ nguyên thứ tự → `personal.rawFields`. Bước này luôn đáng tin.
-2. Gán tên trường bằng con trỏ tuần tự với các mốc neo nhận diện chắc chắn (chuỗi 12 chữ số, ngày tháng, `Nam`/`Nữ`, `Việt Nam`).
+2. Nếu DG13 có dạng `SEQUENCE { INTEGER chỉ_số, giá_trị… }`, gom giá trị theo chỉ số → `personal.fieldsByIndex` (giữ `""` cho trường rỗng) và gán tên trường theo chỉ số:
 
-Nếu một đợt phát hành thay đổi bố cục, bước 2 có thể lệch nhưng bước 1 thì không. **Hãy đối chiếu với thẻ thật của bạn và dùng `rawFields` khi cần chắc chắn tuyệt đối.** Cả Android và iOS dùng chung thuật toán nên kết quả giống nhau.
+   | Chỉ số | Trường | Ghi chú thẻ Căn cước 2024 |
+   |---|---|---|
+   | 1 | `idNumber` | |
+   | 2 | `fullName` | |
+   | 3 | `dateOfBirth` | |
+   | 4 | `gender` | |
+   | 5 | `nationality` | |
+   | 6 | `ethnicity` | |
+   | 7 | `religion` | |
+   | 8 | `placeOfOrigin` | mặt thẻ in "Nơi đăng ký khai sinh" |
+   | 9 | `placeOfResidence` | mặt thẻ in "Nơi cư trú" |
+   | 10 | `personalIdentification` | thường rỗng |
+   | 11 | `dateOfIssue` | |
+   | 12 | `dateOfExpiry` | |
+   | 13 | `fatherName`, `motherName` | có thể rỗng một trong hai |
+   | 14 | `spouseName` | |
+   | 15 | `oldIdNumber` | CMND 9 số hoặc CCCD 12 số |
+
+3. Nếu không nhận ra cấu trúc có chỉ số, lùi về con trỏ tuần tự với các mốc neo nhận diện chắc chắn (chuỗi 12 chữ số, ngày tháng, `Nam`/`Nữ`, `Việt Nam`).
+
+`personal.cardType` (`CCCD` | `CAN_CUOC`) suy từ ngày cấp: từ 01/07/2024 trở đi là thẻ Căn cước mẫu mới.
+
+Nếu một đợt phát hành thay đổi bố cục, các trường có tên có thể lệch nhưng `rawFields` và `fieldsByIndex` thì không. **Hãy đối chiếu với thẻ thật của bạn và dùng `rawFields` khi cần chắc chắn tuyệt đối.** Cả Android và iOS dùng chung thuật toán nên kết quả giống nhau.
 
 ---
 
